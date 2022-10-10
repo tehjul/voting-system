@@ -33,22 +33,29 @@ contract Voting is Ownable {
     }
 
     event VoterRegistered(address voterAddress);
-    event WorkflowStatusChange(
-        WorkflowStatus previousStatus,
-        WorkflowStatus newStatus
-    );
+    event WorkflowStatusChange(WorkflowStatus previousStatus, WorkflowStatus newStatus);
     event ProposalRegistered(uint256 proposalId);
     event Voted(address voter, uint256 proposalId);
+
+    // modifiers
 
     modifier onlyRegistered() {
         require(voters[msg.sender].isRegistered, "Only registered address can propose !");
         _;
     }
 
+    // getters
+
     function getWinner() public view returns (Proposal memory) {
         require(workflowStatus == WorkflowStatus.VotingSessionEnded, "Votes aren't finished !");
         return proposals[winningProposalId];
     }
+
+    function getProposals() public view returns (Proposal[] memory) {
+        return proposals;
+    }
+
+    // functions
 
     function whitelist(address _address) external onlyOwner {
         require(workflowStatus == WorkflowStatus.RegisteringVoters, "Registrations are not open !");
@@ -73,10 +80,6 @@ contract Voting is Ownable {
         emit ProposalRegistered(proposals.length - 1);
     }
 
-    function getProposals() public view returns (Proposal[] memory) {
-        return proposals;
-    }
-
     function vote(uint256 _proposalId) public onlyRegistered {
         require(workflowStatus == WorkflowStatus.VotingSessionStarted, "Votes are not open !");
         require(!voters[msg.sender].hasVoted, "You already voted !");
@@ -86,7 +89,8 @@ contract Voting is Ownable {
         emit Voted(msg.sender, _proposalId);
     }
 
-    // check if a proposal already exists
+    // Helpers
+
     function proposalAlreadyExists(string calldata _description) internal view returns (bool) {
         for (uint256 i = 0; i < proposals.length; i++) {
             if (keccak256(abi.encodePacked(proposals[i].description)) == keccak256(abi.encodePacked(_description))) {
