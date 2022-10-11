@@ -13,23 +13,23 @@ contract Voting is Ownable {
     mapping(address => Voter) voters;
 
     struct Voter {
-        bool isRegistered;
-        bool hasVoted;
-        uint256 votedProposalId;
+      bool isRegistered;
+      bool hasVoted;
+      uint256 votedProposalId;
     }
 
     struct Proposal {
-        string description;
-        uint256 voteCount;
+      string description;
+      uint256 voteCount;
     }
 
     enum WorkflowStatus {
-        RegisteringVoters,
-        ProposalsRegistrationStarted,
-        ProposalsRegistrationEnded,
-        VotingSessionStarted,
-        VotingSessionEnded,
-        VotesTallied
+      RegisteringVoters,
+      ProposalsRegistrationStarted,
+      ProposalsRegistrationEnded,
+      VotingSessionStarted,
+      VotingSessionEnded,
+      VotesTallied
     }
 
     event VoterRegistered(address voterAddress);
@@ -37,66 +37,132 @@ contract Voting is Ownable {
     event ProposalRegistered(uint256 proposalId);
     event Voted(address voter, uint256 proposalId);
 
-    // modifiers
+    // ----------
+    // modifiers 
+    // ----------
 
     modifier onlyRegistered() {
-        require(voters[msg.sender].isRegistered, "Only registered address can propose !");
-        _;
+      require(voters[msg.sender].isRegistered, "Only registered address can propose !");
+      _;
     }
 
-    // getters
+    modifier onlyTallied() {
+      require(workflowStatus == WorkflowStatus.VotesTallied, "Votes aren't tallied !");
+      _;
+    }
 
-    function getWinner() public view returns (Proposal memory) {
-        require(workflowStatus == WorkflowStatus.VotingSessionEnded, "Votes aren't finished !");
-        return proposals[winningProposalId];
+    modifier onlyWorkflowStatus(WorkflowStatus _workflowStatus, string memory _errorMessage) {
+      require(workflowStatus == _workflowStatus, _errorMessage);
+      _;
+    }
+
+    // --------
+    // getters 
+    // --------
+
+    function getWinnerProposal() public view onlyTallied returns(Proposal memory) {
+      return proposals[winningProposalId];
+    }
+
+    function getWinnerId() public view onlyTallied returns(uint) {
+      return winningProposalId;
+    }
+
+    function getWinnerDescription() public view onlyTallied returns(string memory) {
+      return proposals[winningProposalId].description;
+    }
+
+    function getWinnerVoteCount() public view onlyTallied returns(uint) {
+      return proposals[winningProposalId].voteCount;
     }
 
     function getProposals() public view returns (Proposal[] memory) {
-        return proposals;
+      return proposals;
+    }
+    
+    function getCurrentWorkflowStatus() public view returns(WorkflowStatus) {
+      return workflowStatus;
     }
 
+    // ----------
     // functions
+    // ----------
 
-    function whitelist(address _address) external onlyOwner {
-        require(workflowStatus == WorkflowStatus.RegisteringVoters, "Registrations are not open !");
-        require(!voters[_address].isRegistered, "This address is already registered !");
-        voters[_address].isRegistered = true;
-        emit VoterRegistered(_address);
+    function whitelist(address _address) 
+      external 
+      onlyOwner
+      onlyWorkflowStatus(WorkflowStatus.RegisteringVoters, "Registrations are not open !") 
+    {
+      require(!voters[_address].isRegistered, "This address is already registered !");
+      voters[_address].isRegistered = true;
+      emit VoterRegistered(_address);
     }
 
-    function changeWorkflowStatus(WorkflowStatus _newWorkflowStatus) external onlyOwner {
-        require(workflowStatus != _newWorkflowStatus, "This workflow status is already set !");
-        WorkflowStatus previousStatus = workflowStatus;
-        workflowStatus = _newWorkflowStatus;
-        emit WorkflowStatusChange(previousStatus, _newWorkflowStatus);
+    function changeWorkflowStatus(WorkflowStatus _newWorkflowStatus) 
+      public 
+      onlyOwner
+    {
+      require(workflowStatus != _newWorkflowStatus, "This workflow status is already set !");
+      WorkflowStatus previousStatus = workflowStatus;
+      workflowStatus = _newWorkflowStatus;
+      emit WorkflowStatusChange(previousStatus, _newWorkflowStatus);
     }
 
-    function propose(string calldata _description) public onlyRegistered {
-        require(workflowStatus == WorkflowStatus.ProposalsRegistrationStarted, "Proposals are not open !");
-        require(!proposalAlreadyExists(_description), "It has already been proposed !");
-        Proposal memory newProposal;
-        newProposal.description = _description;
-        proposals.push(newProposal);
-        emit ProposalRegistered(proposals.length - 1);
+    function propose(string calldata _description) 
+      public 
+      onlyRegistered 
+      onlyWorkflowStatus(WorkflowStatus.ProposalsRegistrationStarted, "Proposals are not open !") 
+    {
+      require(!proposalAlreadyExists(_description), "It has already been proposed !");
+      Proposal memory newProposal;
+      newProposal.description = _description;
+      proposals.push(newProposal);
+      emit ProposalRegistered(proposals.length - 1);
     }
 
-    function vote(uint256 _proposalId) public onlyRegistered {
-        require(workflowStatus == WorkflowStatus.VotingSessionStarted, "Votes are not open !");
-        require(!voters[msg.sender].hasVoted, "You already voted !");
-        voters[msg.sender].hasVoted = true;
-        voters[msg.sender].votedProposalId = _proposalId;
-        proposals[_proposalId].voteCount += 1;
-        emit Voted(msg.sender, _proposalId);
+    function vote(uint256 _proposalId) 
+      public 
+      onlyRegistered 
+      onlyWorkflowStatus(WorkflowStatus.VotingSessionStarted, "Votes are not open !") 
+    {
+      require(!voters[msg.sender].hasVoted, "You already voted !");
+      voters[msg.sender].hasVoted = true;
+      voters[msg.sender].votedProposalId = _proposalId;
+      proposals[_proposalId].voteCount++;
+      emit Voted(msg.sender, _proposalId);
     }
 
-    // Helpers
-
-    function proposalAlreadyExists(string calldata _description) internal view returns (bool) {
-        for (uint256 i = 0; i < proposals.length; i++) {
-            if (keccak256(abi.encodePacked(proposals[i].description)) == keccak256(abi.encodePacked(_description))) {
-                return true;
-            }
+    function setWinner() 
+      external 
+      onlyOwner
+      onlyWorkflowStatus(WorkflowStatus.VotingSessionEnded, "Votes are not closed !")  
+    {
+      uint _winnerId;
+      uint _winnerVoteCount;
+      for (uint256 i = 0; i < proposals.length; i++) {
+        if (proposals[i].voteCount > _winnerVoteCount) {
+          _winnerVoteCount = proposals[i].voteCount;
+          _winnerId = i;
         }
-        return false;
+      }
+      winningProposalId = _winnerId;
+      changeWorkflowStatus(WorkflowStatus.VotesTallied);
+    }
+
+    // --------
+    // helpers
+    // --------
+
+    function proposalAlreadyExists(string calldata _description) 
+      internal 
+      view 
+      returns (bool) 
+    {
+      for (uint256 i = 0; i < proposals.length; i++) {
+        if (keccak256(abi.encodePacked(proposals[i].description)) == keccak256(abi.encodePacked(_description))) {
+          return true;
+        }
+      }
+      return false;
     }
 }
