@@ -3,7 +3,6 @@
 ![https://github.com/tehjul](https://img.shields.io/badge/Compiler-0.8.17-blue?style=plastic)
 
 ## Simple voting system
-#
 
 A smart contract that allows to register voters on a whitelist with their ethereum address. Once registered, they can submit one or many proposals and they can vote once for a proposal.
 
