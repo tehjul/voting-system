@@ -4,8 +4,6 @@ pragma solidity 0.8.17;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-// TODO : maybe add a reset
-
 contract Voting is Ownable {
     uint256 winningProposalId;
     uint256 currentProposalId;
